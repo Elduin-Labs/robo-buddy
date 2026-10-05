@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "robo_buddy:item/robo_buddy_spawn_egg"
+  }
+}

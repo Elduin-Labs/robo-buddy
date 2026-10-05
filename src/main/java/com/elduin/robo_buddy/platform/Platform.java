@@ -1,4 +1,4 @@
-package com.example.modtemplate.platform;
+package com.elduin.robo_buddy.platform;
 
 public interface Platform {
 	boolean isModLoaded(String modId);
