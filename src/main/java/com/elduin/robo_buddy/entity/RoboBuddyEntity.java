@@ -8,10 +8,13 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
@@ -20,8 +23,11 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Set;
 
@@ -35,6 +41,8 @@ public class RoboBuddyEntity extends PathfinderMob {
 	public static final int KNOCKBACK_BLOCKS = 255;
 
 	public static final String PLEA = "Don't delete me! I'm Elduin's friend!";
+
+	public static final String GREETING = "Hmm... you might be Elduin.";
 
 	private static final double HEARING_RANGE = 48.0;
 
@@ -66,15 +74,29 @@ public class RoboBuddyEntity extends PathfinderMob {
 		return false;
 	}
 
-	/** Says the line to everyone close enough to hear it. */
-	private void beg(ServerLevel level) {
+	/** Only runs the first time it appears, so it greets you when you spawn it, not every time the world loads. */
+	@Override
+	public SpawnGroupData finalizeSpawn(ServerLevelAccessor level, DifficultyInstance difficulty, EntitySpawnReason reason, @Nullable SpawnGroupData groupData) {
+		SpawnGroupData result = super.finalizeSpawn(level, difficulty, reason, groupData);
+		if (reason == EntitySpawnReason.SPAWN_ITEM_USE) {
+			this.say(level.getLevel(), GREETING);
+		}
+		return result;
+	}
+
+	/** Says a line in chat to everyone close enough to hear it. */
+	private void say(ServerLevel level, String text) {
 		Component line = Component.literal("<Robo Buddy> ").withStyle(ChatFormatting.AQUA)
-				.append(Component.literal(PLEA).withStyle(ChatFormatting.WHITE));
+				.append(Component.literal(text).withStyle(ChatFormatting.WHITE));
 		for (ServerPlayer player : level.players()) {
 			if (player.distanceToSqr(this) <= HEARING_RANGE * HEARING_RANGE) {
 				player.sendSystemMessage(line);
 			}
 		}
+	}
+
+	private void beg(ServerLevel level) {
+		this.say(level, PLEA);
 		level.playSound(null, this.blockPosition(), SoundEvents.IRON_GOLEM_HURT, SoundSource.NEUTRAL, 1.0F, 1.6F);
 	}
 
