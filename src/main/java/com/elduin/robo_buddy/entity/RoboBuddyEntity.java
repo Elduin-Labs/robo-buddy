@@ -25,11 +25,15 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
 
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * A little blue robot. It wanders around and looks at you. Hit it and it begs you not to delete it,
@@ -42,7 +46,19 @@ public class RoboBuddyEntity extends PathfinderMob {
 
 	public static final String PLEA = "Don't delete me! I'm Elduin's friend!";
 
-	public static final String GREETING = "Hmm... you might be Elduin.";
+	public static final String GREETING = "Hmm... you might be Elduin. Is that you? Say yes!";
+
+	public static final String HAPPY = "I knew it! Hi Elduin!";
+
+	private static final double CHAT_RANGE = 48.0;
+
+	/** Who spawned it and is being asked "are you Elduin?". Only matters right after spawning, so it is not saved. */
+	@Nullable
+	private UUID askedId;
+
+	/** The player who said yes. It remembers them, even after the world is closed and opened again. */
+	@Nullable
+	private UUID friendId;
 
 	private static final double HEARING_RANGE = 48.0;
 
@@ -79,9 +95,48 @@ public class RoboBuddyEntity extends PathfinderMob {
 	public SpawnGroupData finalizeSpawn(ServerLevelAccessor level, DifficultyInstance difficulty, EntitySpawnReason reason, @Nullable SpawnGroupData groupData) {
 		SpawnGroupData result = super.finalizeSpawn(level, difficulty, reason, groupData);
 		if (reason == EntitySpawnReason.SPAWN_ITEM_USE) {
-			this.say(level.getLevel(), GREETING);
+			ServerLevel serverLevel = level.getLevel();
+			Player spawner = serverLevel.getNearestPlayer(this.getX(), this.getY(), this.getZ(), 10.0, false);
+			this.askedId = spawner == null ? null : spawner.getUUID();
+			this.say(serverLevel, GREETING);
 		}
 		return result;
+	}
+
+	/** Called for every chat message. If the person it asked says yes, it knows them from then on. */
+	public void hearChat(ServerPlayer speaker, String text) {
+		if (this.friendId != null || !speaker.getUUID().equals(this.askedId)) {
+			return;
+		}
+		String word = text.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z]", "");
+		if (word.equals("yes") || word.equals("yeah") || word.equals("yep")) {
+			this.friendId = speaker.getUUID();
+			this.askedId = null;
+			this.say(speaker.level(), HAPPY);
+			this.playSound(SoundEvents.IRON_GOLEM_REPAIR, 1.0F, 1.4F);
+		}
+	}
+
+	public boolean knows(Player player) {
+		return player.getUUID().equals(this.friendId);
+	}
+
+	public static double chatRange() {
+		return CHAT_RANGE;
+	}
+
+	@Override
+	protected void addAdditionalSaveData(ValueOutput output) {
+		super.addAdditionalSaveData(output);
+		if (this.friendId != null) {
+			output.putString("FriendId", this.friendId.toString());
+		}
+	}
+
+	@Override
+	protected void readAdditionalSaveData(ValueInput input) {
+		super.readAdditionalSaveData(input);
+		this.friendId = input.getString("FriendId").map(UUID::fromString).orElse(null);
 	}
 
 	/** Says a line in chat to everyone close enough to hear it. */
