@@ -2,6 +2,9 @@ package com.elduin.robo_buddy.entity;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -9,6 +12,8 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.DifficultyInstance;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -52,6 +57,10 @@ public class RoboBuddyEntity extends PathfinderMob {
 
 	private static final double CHAT_RANGE = 48.0;
 
+	/** True while it is sitting. Shared with the player's game so it can be drawn sitting. */
+	private static final EntityDataAccessor<Boolean> SITTING =
+			SynchedEntityData.defineId(RoboBuddyEntity.class, EntityDataSerializers.BOOLEAN);
+
 	/** Who spawned it and is being asked "are you Elduin?". Only matters right after spawning, so it is not saved. */
 	@Nullable
 	private UUID askedId;
@@ -71,9 +80,49 @@ public class RoboBuddyEntity extends PathfinderMob {
 	}
 
 	@Override
+	protected void defineSynchedData(SynchedEntityData.Builder builder) {
+		super.defineSynchedData(builder);
+		builder.define(SITTING, false);
+	}
+
+	public boolean isSitting() {
+		return this.entityData.get(SITTING);
+	}
+
+	private void setSitting(boolean sitting) {
+		this.entityData.set(SITTING, sitting);
+	}
+
+	/** Right-click it once it knows you: it sits down. Right-click again and it gets up. */
+	@Override
+	protected InteractionResult mobInteract(Player player, InteractionHand hand) {
+		if (!this.knows(player)) {
+			return super.mobInteract(player, hand);
+		}
+		if (!this.level().isClientSide()) {
+			boolean sit = !this.isSitting();
+			this.setSitting(sit);
+			this.getNavigation().stop();
+			this.playSound(SoundEvents.IRON_GOLEM_REPAIR, 0.8F, sit ? 0.9F : 1.5F);
+		}
+		return InteractionResult.SUCCESS;
+	}
+
+	@Override
 	protected void registerGoals() {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
-		this.goalSelector.addGoal(1, new WaterAvoidingRandomStrollGoal(this, 0.8));
+		// It only wanders when it is standing up.
+		this.goalSelector.addGoal(1, new WaterAvoidingRandomStrollGoal(this, 0.8) {
+			@Override
+			public boolean canUse() {
+				return !RoboBuddyEntity.this.isSitting() && super.canUse();
+			}
+
+			@Override
+			public boolean canContinueToUse() {
+				return !RoboBuddyEntity.this.isSitting() && super.canContinueToUse();
+			}
+		});
 		this.goalSelector.addGoal(2, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(3, new RandomLookAroundGoal(this));
 	}
@@ -131,12 +180,14 @@ public class RoboBuddyEntity extends PathfinderMob {
 		if (this.friendId != null) {
 			output.putString("FriendId", this.friendId.toString());
 		}
+		output.putBoolean("Sitting", this.isSitting());
 	}
 
 	@Override
 	protected void readAdditionalSaveData(ValueInput input) {
 		super.readAdditionalSaveData(input);
 		this.friendId = input.getString("FriendId").map(UUID::fromString).orElse(null);
+		this.setSitting(input.getBooleanOr("Sitting", false));
 	}
 
 	/** Says a line in chat to everyone close enough to hear it. */

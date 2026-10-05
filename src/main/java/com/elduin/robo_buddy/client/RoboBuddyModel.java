@@ -15,6 +15,7 @@ import net.minecraft.util.Mth;
  */
 public class RoboBuddyModel extends EntityModel<RoboBuddyRenderState> {
 
+	private final ModelPart root;
 	private final ModelPart head;
 	private final ModelPart antenna;
 	private final ModelPart rightArm;
@@ -24,6 +25,7 @@ public class RoboBuddyModel extends EntityModel<RoboBuddyRenderState> {
 
 	public RoboBuddyModel(ModelPart root) {
 		super(root);
+		this.root = root;
 		this.head = root.getChild("head");
 		this.antenna = this.head.getChild("antenna");
 		this.rightArm = root.getChild("right_arm");
@@ -74,6 +76,18 @@ public class RoboBuddyModel extends EntityModel<RoboBuddyRenderState> {
 		// The antenna wobbles a little all the time.
 		this.antenna.zRot = Mth.sin(state.ageInTicks * 0.12F) * 0.12F;
 		this.antenna.xRot = Mth.cos(state.ageInTicks * 0.09F) * 0.08F;
+
+		// Sitting: drop down to the ground and stick the legs out in front.
+		this.root.y = state.sitting ? 4.0F : 0.0F;
+		if (state.sitting) {
+			this.rightLeg.xRot = -1.5F;
+			this.leftLeg.xRot = -1.5F;
+			this.rightArm.xRot = -0.3F;
+			this.leftArm.xRot = -0.3F;
+			this.rightArm.zRot = 0.1F;
+			this.leftArm.zRot = -0.1F;
+			return;
+		}
 
 		// Walking: arms and legs swing against each other.
 		float swing = Mth.cos(state.walkAnimationPos * 0.6662F) * 1.2F * state.walkAnimationSpeed;

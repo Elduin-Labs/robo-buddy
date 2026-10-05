@@ -21,6 +21,12 @@ public class RoboBuddyRenderer extends MobRenderer<RoboBuddyEntity, RoboBuddyRen
 	}
 
 	@Override
+	public void extractRenderState(RoboBuddyEntity entity, RoboBuddyRenderState state, float partialTick) {
+		super.extractRenderState(entity, state, partialTick);
+		state.sitting = entity.isSitting();
+	}
+
+	@Override
 	public RoboBuddyRenderState createRenderState() {
 		return new RoboBuddyRenderState();
 	}
